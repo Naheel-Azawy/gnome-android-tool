@@ -6,6 +6,7 @@ const PopupMenu = imports.ui.popupMenu;
 const Panel = imports.ui.panel;
 const Lang = imports.lang;
 const GLib = imports.gi.GLib;
+const Gio = imports.gi.Gio;
 
 const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
@@ -71,6 +72,13 @@ const AndroidMenu = new Lang.Class({
         //start adb daemon if not running
         AdbHelper.startDaemon();
         
+        this._monitor = Gio.VolumeMonitor.get();
+		this._addedId = this._monitor.connect('mount-added', Lang.bind(this, this._findDevices));
+		this._removedId = this._monitor.connect('mount-removed', Lang.bind(this, this._findDevices));
+		this._connected = true;
+        
+        this._findDevices();
+        
     },
 
     _findDevices: function() {
@@ -80,16 +88,20 @@ const AndroidMenu = new Lang.Class({
         if(result.error != null) {
             global.log(result.error);
             this._addErrorItem(result.error);
+            this.actor.hide();
+            return;
         } else {
 
             if(result.devices != null && result.devices.length!=0) {
                 this._addMenuItems(result.devices);
             } else {
                 this._addErrorItem("No devices found");
+                this.actor.hide();
+                return;
             }
 
         }
-
+        this.actor.show();
     },
 
     _screenshotClicked: function(device) {
@@ -222,8 +234,16 @@ const AndroidMenu = new Lang.Class({
         _toArray: function(str) {
             let arr = str.split(" ");
             return arr;
-        }
+        },
 
+        destroy: function() {
+			if (this._connected) {
+				this._monitor.disconnect(this._addedId);
+				this._monitor.disconnect(this._removedId);
+				this._connected = false;
+		    }
+			this.parent();
+        },
 
     });
 
